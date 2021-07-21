@@ -62,7 +62,7 @@ function onMessageHandler(target, context, msg, self) {
 }
 
 function rollDice(nSides) {
-  const sides = typeof nSides === "number" ? nSides : 6;
+  const sides = isNaN(nSides) ? 6:  nSides;
   return Math.floor(Math.random() * sides) + 1;
 }
 
