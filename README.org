@@ -1,0 +1,9 @@
+* Bot para twitch
+Para que funcione hay que crear el archivo .env y añadir las siguientes
+variables teniendo en cuenta que se crea una cuenta secundaria para el bot y que
+la principal es desde la que se hace el streaming.
+
+- CLIENT_ID :: El nombre de la cuenta secundaria.
+- CHANNEL_ID :: El nombre de la cuenta principal.
+- TWITCH_BOT_TOKEN :: el token oauth de la cuenta secundaria.
+- NLP_URL :: la url donde tengamos levantado el servicio nlp-for-bots.
