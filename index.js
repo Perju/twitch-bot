@@ -15,7 +15,7 @@ const client = new tmi.client(opts);
 client.on("connected", onConnectedHandler);
 client.on("message", onMessageHandler);
 client.on("whisper", (from, userstate, message, self) => {
-  let message_out = response(message);
+  let message_out = response(message, from);
   message_out.then((response) => {
     client
       .whisper(from, response.data || "No entiendo que dices")
@@ -27,12 +27,12 @@ client.on("whisper", (from, userstate, message, self) => {
 
 client.connect();
 
-const response = async (message) => {
+const response = async (message, nombre) => {
   const options = {
     method: "GET",
     url: process.env.NLP_URL,
     json: true,
-    data: { frase: message },
+    data: { frase: message, nombre: nombre },
   };
   return await axios(options);
 };
@@ -48,7 +48,7 @@ function onMessageHandler(target, context, msg, self) {
     client.say(target, `${context.username} ha sacado un ${num}`);
     console.log(`* Executed ${commandName} command`);
   } else if (msg.toLowerCase().includes("@perjubot")) {
-    let message_out = response(msg);
+    let message_out = response(msg, context.username);
     message_out.then((response) => {
       client
         .say(target, response.data || "No entiendo que dices")
@@ -62,7 +62,7 @@ function onMessageHandler(target, context, msg, self) {
 }
 
 function rollDice(nSides) {
-  const sides = isNaN(nSides) ? 6:  nSides;
+  const sides = isNaN(nSides) ? 6 : nSides;
   return Math.floor(Math.random() * sides) + 1;
 }
 
