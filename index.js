@@ -1,7 +1,17 @@
 require("dotenv").config();
 const axios = require("axios");
+const fs = require("fs");
 
 const tmi = require("tmi.js");
+
+let relations = {};
+
+fs.readFile("relations.txt", "utf8", (err, data) => {
+  data.split(/\r?\n/).forEach((line) => {
+    let kv = line.split("=");
+    if (kv.length === 2) relations[kv[0]] = kv[1];
+  });
+});
 
 const opts = {
   identity: {
@@ -27,19 +37,22 @@ client.on("whisper", (from, userstate, message, self) => {
 
 client.connect();
 
-const response = async (message, nombre) => {
+const response = async (message, nombre, relacion) => {
+  console.log(relacion);
   const options = {
     method: "GET",
     url: process.env.NLP_URL,
     json: true,
-    data: { frase: message, nombre: nombre },
+    data: { frase: message, nombre: nombre, relacion: relacion },
   };
   return await axios(options);
 };
 
 function onMessageHandler(target, context, msg, self) {
   if (self) return;
+  console.log(context);
 
+  if (context.userid) console.log(context);
   const commandName = msg.trim();
 
   if (commandName.startsWith("!dice")) {
@@ -48,7 +61,7 @@ function onMessageHandler(target, context, msg, self) {
     client.say(target, `${context.username} ha sacado un ${num}`);
     console.log(`* Executed ${commandName} command`);
   } else if (msg.toLowerCase().includes("@perjubot")) {
-    let message_out = response(msg, context.username);
+    let message_out = response(msg, context.username, relations[context.username]);
     message_out.then((response) => {
       client
         .say(target, response.data || "No entiendo que dices")
