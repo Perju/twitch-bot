@@ -1,79 +1,127 @@
-require("dotenv").config();
-const axios = require("axios");
-const fs = require("fs");
+import axios from "axios";
+import fs from "fs";
+import tmi from "tmi.js";
 
-const tmi = require("tmi.js");
+class PGTwitchBot {
+  constructor(config) {
+    this.config = config;
+    this.advises = [];
+    this.relations = {};
+    const opts = {
+      identity: {
+        username: this.config.env.CLIENT_ID,
+        password: this.config.env.TWITCH_BOT_TOKEN,
+      },
+      channels: [this.config.env.CHANNEL_ID],
+    };
+    this.client = new tmi.client(opts);
+  }
 
-let relations = {};
+  async initBot() {
+    this.advises = await this.initAdvises(this.config.advises);
 
-fs.readFile("relations.txt", "utf8", (err, data) => {
-  data.split(/\r?\n/).forEach((line) => {
-    let kv = line.split("=");
-    if (kv.length === 2) relations[kv[0]] = kv[1];
-  });
-});
+    this.relations = await this.initRelations(this.config.relations);
 
-const opts = {
-  identity: {
-    username: process.env.CLIENT_ID,
-    password: process.env.TWITCH_BOT_TOKEN,
-  },
-  channels: [process.env.CHANNEL_ID],
-};
-const client = new tmi.client(opts);
+    this.client.on("connected", this.onConnectedHandler);
 
-client.on("connected", onConnectedHandler);
-client.on("message", onMessageHandler);
-client.on("whisper", (from, userstate, message, self) => {
-  let message_out = response(message, from);
-  message_out.then((response) => {
-    client
-      .whisper(from, response.data || "No entiendo que dices")
-      .catch((err) => {
-        console.error(err);
-      });
-  });
-});
-
-client.connect();
-
-const response = async (message, nombre, relacion) => {
-  const options = {
-    method: "GET",
-    url: process.env.NLP_URL,
-    json: true,
-    data: { frase: message, nombre: nombre, relacion: relacion },
-  };
-  return await axios(options);
-};
-
-function onMessageHandler(target, context, msg, self) {
-  if (self) return;
-
-  console.log(target);
-
-  const commandName = msg.trim();
-
-  if (commandName.startsWith("!dice")) {
-    const sides = parseInt(commandName.split(" ")[1]);
-    const num = rollDice(sides);
-    client.say(target, `${context.username} ha sacado un ${num}`);
-    console.log(`* Executed ${commandName} command`);
-  } else if (msg.toLowerCase().includes("@perjubot")) {
-    let message_out = response(
-      msg,
-      context.username,
-      relations[context.username]
+    this.client.on(
+      "message",
+      this.onMessageHandler(this.getResponse, this.client, this.relations)
     );
-    message_out.then((response) => {
-      client
-        .say(target, response.data || "No entiendo que dices")
-        .catch((err) => {
-          console.error(err);
-        });
+
+    this.client.on("whisper", (from, userstate, message, self) => {
+      const NLP_URL = process.env.NLP_URL;
+      let message_out = getResponse(NLP_URL, message, from);
+      message_out.then((response) => {
+        this.client
+          .whisper(from, response.data || "No entiendo que dices")
+          .catch((err) => {
+            console.error(err);
+          });
+      });
     });
-  } else {
-    console.log(`* Unknown command ${commandName}`);
+
+    this.client.connect();
+  }
+
+  async initAdvises(fileName) {
+    let advises;
+
+    await fs.readFile(fileName, "utf8", (err, data) => {
+      advises = data.split(/\r?\n/).filter((e) => e !== "");
+      setInterval(() => {
+        this.sayAdvise(this.client, "#perju_gatar", advises);
+      }, 600000);
+    });
+    return advises;
+  }
+  async initRelations(fileName) {
+    let relations = {};
+
+    let data = fs.readFileSync(fileName);
+    relations = data
+      .toString()
+      .split(/\r?\n/)
+      .reduce((acc, cur) => {
+        let kv = cur.split("=");
+        if (kv.length === 2) acc[kv[0]] = kv[1];
+        return acc;
+      }, {});
+
+    return relations;
+  }
+
+  onConnectedHandler(addr, port) {
+    console.log(`* Connected to ${addr}:${port}`);
+  }
+
+  sayAdvise(client, target, advises) {
+    client.say(target, rndElem(advises)).catch((err) => console.log(err));
+  }
+
+  onMessageHandler(getResponse, client, relations) {
+    return (target, context, msg, self) => {
+      if (self) return;
+
+      const commandName = msg.trim();
+      if (commandName.startsWith("!dice")) {
+        const sides = parseInt(commandName.split(" ")[1]);
+        const num = rollDice(sides);
+        client.say(target, `${context.username} ha sacado un ${num}`);
+        console.log(`* Executed ${commandName} command`);
+      } else if (msg.toLowerCase().includes("@perjubot")) {
+        const NLP_URL = process.env.NLP_URL;
+        let message_out = getResponse(
+          NLP_URL,
+          msg,
+          context.username,
+          relations[context.username]
+        );
+        message_out.then((response) => {
+          client
+            .say(target, response.data || "No entiendo que dices")
+            .catch((err) => {
+              console.error(err);
+            });
+        });
+      } else {
+        console.log(`* Unknown command ${commandName}`);
+      }
+    };
+  }
+
+  getResponse(url, frase, nombre, relation) {
+    const options = {
+      method: "GET",
+      url: url,
+      json: true,
+      data: {
+        frase: frase,
+        nombre: nombre,
+        relacion: relation,
+      },
+    };
+    return axios(options);
   }
 }
 
@@ -82,26 +130,10 @@ function rollDice(nSides) {
   return Math.floor(Math.random() * sides) + 1;
 }
 
-function onConnectedHandler(addr, port) {
-  console.log(`* Connected to ${addr}:${port}`);
-}
-
-let advises;
-
-fs.readFile("advises.txt", "utf8", (err, data) => {
-  advises = data.split(/\r?\n/).filter((e) => e !== "");
-  setInterval(() => {
-    sayAdvise(client, "#perju_gatar", advises);
-  }, 600000);
-  console.log(advises);
-});
-
-function sayAdvise(client, target, advises) {
-  client.say(target, rndElem(advises)).catch((err) => console.log(err));
-}
-
-const rndElem = (arr) => {
+function rndElem(arr) {
   return arr === undefined
     ? "Preparando cosicas"
     : arr[Math.floor(Math.random() * arr.length)];
-};
+}
+
+export default PGTwitchBot;
