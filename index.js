@@ -38,7 +38,6 @@ client.on("whisper", (from, userstate, message, self) => {
 client.connect();
 
 const response = async (message, nombre, relacion) => {
-  console.log(relacion);
   const options = {
     method: "GET",
     url: process.env.NLP_URL,
@@ -50,9 +49,9 @@ const response = async (message, nombre, relacion) => {
 
 function onMessageHandler(target, context, msg, self) {
   if (self) return;
-  console.log(context);
 
-  if (context.userid) console.log(context);
+  console.log(target);
+
   const commandName = msg.trim();
 
   if (commandName.startsWith("!dice")) {
@@ -61,7 +60,11 @@ function onMessageHandler(target, context, msg, self) {
     client.say(target, `${context.username} ha sacado un ${num}`);
     console.log(`* Executed ${commandName} command`);
   } else if (msg.toLowerCase().includes("@perjubot")) {
-    let message_out = response(msg, context.username, relations[context.username]);
+    let message_out = response(
+      msg,
+      context.username,
+      relations[context.username]
+    );
     message_out.then((response) => {
       client
         .say(target, response.data || "No entiendo que dices")
@@ -82,3 +85,23 @@ function rollDice(nSides) {
 function onConnectedHandler(addr, port) {
   console.log(`* Connected to ${addr}:${port}`);
 }
+
+let advises;
+
+fs.readFile("advises.txt", "utf8", (err, data) => {
+  advises = data.split(/\r?\n/).filter((e) => e !== "");
+  setInterval(() => {
+    sayAdvise(client, "#perju_gatar", advises);
+  }, 600000);
+  console.log(advises);
+});
+
+function sayAdvise(client, target, advises) {
+  client.say(target, rndElem(advises)).catch((err) => console.log(err));
+}
+
+const rndElem = (arr) => {
+  return arr === undefined
+    ? "Preparando cosicas"
+    : arr[Math.floor(Math.random() * arr.length)];
+};
