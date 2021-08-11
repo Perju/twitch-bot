@@ -14,8 +14,7 @@ const botConfig = {
 const bot = new PGTwitchBot(botConfig);
 async function start() {
   await bot.initBot();
+  bot.startAdvises();
 }
 
 start();
-
-

@@ -7,6 +7,7 @@ class PGTwitchBot {
     this.config = config;
     this.advises = [];
     this.relations = {};
+    this.intervalAdvises = { _destroyed: true };
     const opts = {
       identity: {
         username: this.config.env.CLIENT_ID,
@@ -19,7 +20,6 @@ class PGTwitchBot {
 
   async initBot() {
     this.advises = await this.initAdvises(this.config.advises);
-
     this.relations = await this.initRelations(this.config.relations);
 
     this.client.on("connected", this.onConnectedHandler);
@@ -46,15 +46,22 @@ class PGTwitchBot {
 
   async initAdvises(fileName) {
     let advises;
-
     await fs.readFile(fileName, "utf8", (err, data) => {
       advises = data.split(/\r?\n/).filter((e) => e !== "");
-      setInterval(() => {
-        this.sayAdvise(this.client, "#perju_gatar", advises);
-      }, 600000);
     });
     return advises;
   }
+  startAdvises(){
+    if(this.intervalAdvises._destroyed){
+      this.intervalAdvises = setInterval(() => {
+        this.sayAdvise(this.client, "#perju_gatar", advises);
+      }, 600000);
+    }
+  }
+  stopAdvises(){
+    clearInterval(this.intervalAdvises);
+  }
+
   async initRelations(fileName) {
     let relations = {};
 
