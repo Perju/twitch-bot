@@ -31,7 +31,7 @@ class PGTwitchBot {
 
     this.client.on("whisper", (from, userstate, message, self) => {
       const NLP_URL = process.env.NLP_URL;
-      let message_out = getResponse(NLP_URL, message, from);
+      let message_out = this.getResponse(NLP_URL, message, from);
       message_out.then((response) => {
         this.client
           .whisper(from, response.data || "No entiendo que dices")
@@ -54,7 +54,7 @@ class PGTwitchBot {
   startAdvises(){
     if(this.intervalAdvises._destroyed){
       this.intervalAdvises = setInterval(() => {
-        this.sayAdvise(this.client, "#perju_gatar", advises);
+        this.sayAdvise(this.client, "#perju_gatar", this.advises);
       }, 600000);
     }
   }
