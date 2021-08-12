@@ -5,7 +5,7 @@ import tmi from "tmi.js";
 class PGTwitchBot {
   constructor(config) {
     this.config = config;
-    this.advises = [];
+    this.advices = [];
     this.relations = {};
     this.intervalAdvises = { _destroyed: true };
     const opts = {
@@ -18,9 +18,9 @@ class PGTwitchBot {
     this.client = new tmi.client(opts);
   }
 
-  async initBot() {
-    this.advises = await this.initAdvises(this.config.advises);
-    this.relations = await this.initRelations(this.config.relations);
+  initBot() {
+    this.initAdvices(this.config.advices);
+    this.initRelations(this.config.relations);
 
     this.client.on("connected", this.onConnectedHandler);
 
@@ -44,46 +44,36 @@ class PGTwitchBot {
     this.client.connect();
   }
 
-  async initAdvises(fileName) {
-    let advises;
-    await fs.readFile(fileName, "utf8", (err, data) => {
-      advises = data.split(/\r?\n/).filter((e) => e !== "");
-    });
-    return advises;
+  initAdvices(fileName) {
+    let data = fs.readFile(fileName);
+    this.advices = data.split(/\r?\n/).filter((e) => e !== "");
   }
-  startAdvises(){
-    if(this.intervalAdvises._destroyed){
+  startAdvises() {
+    if (this.intervalAdvises._destroyed) {
       this.intervalAdvises = setInterval(() => {
-        this.sayAdvise(this.client, "#perju_gatar", this.advises);
+        this.sayAdvise(this.client, "#perju_gatar", this.advices);
       }, 600000);
     }
   }
-  stopAdvises(){
+  stopAdvises() {
     clearInterval(this.intervalAdvises);
   }
 
-  async initRelations(fileName) {
-    let relations = {};
-
-    let data = fs.readFileSync(fileName);
-    relations = data
-      .toString()
-      .split(/\r?\n/)
-      .reduce((acc, cur) => {
-        let kv = cur.split("=");
-        if (kv.length === 2) acc[kv[0]] = kv[1];
-        return acc;
-      }, {});
-
-    return relations;
+  initRelations(fileName) {
+    let data = fs.readFileSync(fileName).toString();
+    this.relations = data.split(/\r?\n/).reduce((acc, cur) => {
+      let kv = cur.split("=");
+      if (kv.length === 2) acc[kv[0]] = kv[1];
+      return acc;
+    }, {});
   }
 
   onConnectedHandler(addr, port) {
     console.log(`* Connected to ${addr}:${port}`);
   }
 
-  sayAdvise(client, target, advises) {
-    client.say(target, rndElem(advises)).catch((err) => console.log(err));
+  sayAdvise(client, target, advices) {
+    client.say(target, rndElem(advices)).catch((err) => console.log(err));
   }
 
   onMessageHandler(getResponse, client, relations) {

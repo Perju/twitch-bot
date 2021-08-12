@@ -8,12 +8,13 @@ const __dirname = path.dirname(moduleURL.pathname);
 
 const botConfig = {
   env: process.env,
-  advises: __dirname + "/advises.txt",
+  advises: __dirname + "/advices.txt",
   relations: __dirname + "/relations.txt"
 }
+
 const bot = new PGTwitchBot(botConfig);
-async function start() {
-  await bot.initBot();
+function start() {
+  bot.initBot();
   bot.startAdvises();
 }
 
