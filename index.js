@@ -45,7 +45,7 @@ class PGTwitchBot {
   }
 
   initAdvices(fileName) {
-    let data = fs.readFile(fileName);
+    let data = fs.readFileSync(fileName);
     this.advices = data.split(/\r?\n/).filter((e) => e !== "");
   }
   startAdvises() {
