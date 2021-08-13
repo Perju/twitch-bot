@@ -8,7 +8,7 @@ const __dirname = path.dirname(moduleURL.pathname);
 
 const botConfig = {
   env: process.env,
-  advises: __dirname + "/advices.txt",
+  advices: __dirname + "/advices.txt",
   relations: __dirname + "/relations.txt"
 }
 
