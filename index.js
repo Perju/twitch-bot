@@ -26,7 +26,7 @@ class PGTwitchBot {
 
     this.client.on(
       "message",
-      this.onMessageHandler(this.getResponse, this.client, this.relations)
+      this.onMessageHandler(this.getResponse, this.client, this.relations, this.config.callback)
     );
 
     this.client.on("whisper", (from, userstate, message, self) => {
@@ -76,7 +76,7 @@ class PGTwitchBot {
     client.say(target, rndElem(advices)).catch((err) => console.log(err));
   }
 
-  onMessageHandler(getResponse, client, relations) {
+  onMessageHandler(getResponse, client, relations, callback) {
     return (target, context, msg, self) => {
       if (self) return;
 
@@ -95,12 +95,14 @@ class PGTwitchBot {
           relations[context.username]
         );
         message_out.then((response) => {
-          client
-            .say(target, response.data || "No entiendo que dices")
-            .catch((err) => {
-              console.error(err);
+			let texto = response.data || "No entiendo que dices";
+			callback({text: texto});
+			client
+				.say(target, texto)
+				.catch((err) => {
+				console.error(err);
             });
-        });
+        }).catch((err)=> console.error(err));
       } else {
         console.log(`* Unknown command ${commandName}`);
       }
