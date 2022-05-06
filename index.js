@@ -95,8 +95,10 @@ class PGTwitchBot {
           relations[context.username]
         );
         message_out.then((response) => {
+          let text = response.data || "No entiendo que dices";
+          client.emit("chat_res", {text: text});
           client
-            .say(target, response.data || "No entiendo que dices")
+            .say(target, text)
             .catch((err) => {
               console.error(err);
             });
