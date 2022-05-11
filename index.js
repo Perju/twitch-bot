@@ -1,6 +1,8 @@
 import axios from "axios";
 import fs from "fs";
-import tmi from "tmi.js";
+import { RefreshableAuthProvider, StaticAuthProvider } from "twitch-auth";
+import { ChatClient } from "twitch-chat-client";
+
 
 class PGTwitchBot {
   constructor(config) {
@@ -8,40 +10,54 @@ class PGTwitchBot {
     this.advices = [];
     this.relations = {};
     this.intervalAdvises = { _destroyed: true };
-    const opts = {
-      identity: {
-        username: this.config.env.CLIENT_ID,
-        password: this.config.env.TWITCH_BOT_TOKEN,
-      },
-      channels: [this.config.env.CHANNEL_ID],
-    };
-    this.client = new tmi.client(opts);
+    this.clientId = process.env.CLIENT_ID;
+    this.clientSecret = process.env.TWITCH_BOT_SECRET;
+
+    this.tokenData = JSON.parse(fs.readFileSync(this.config.tokens, "UTF-8"));
+    this.auth = new RefreshableAuthProvider(
+      new StaticAuthProvider(this.clientId, this.tokenData.accessToken),
+      {
+        clientSecret: this.clientSecret,
+        refreshToken: this.tokenData.refreshToken,
+        expiry:
+          this.tokenData.expiryTimestamp === null
+            ? null
+            : new Date(this.tokenData.expiryTimestamp),
+        onRefresh: ({ accessToken, refreshToken, expiryDate }) => {
+          const newTokenData = {
+            accessToken,
+            refreshToken,
+            expiryTimestamp: expiryDate === null ? null : expiryDate.getTime(),
+          };
+          fs.writeFileSync(
+            this.config.tokens,
+            JSON.stringify(newTokenData, null, 4),
+            "UTF-8"
+          );
+        },
+      }
+    );
+    this.chatClient = new ChatClient(this.auth, {
+      channels: [process.env.CHANNEL_ID],
+    });
   }
 
   initBot() {
     this.initAdvices(this.config.advices);
     this.initRelations(this.config.relations);
 
-    this.client.on("connected", this.onConnectedHandler);
-
-    this.client.on(
-      "message",
-      this.onMessageHandler(this.getResponse, this.client, this.relations)
+    this.chatClient.onConnect(this.onConnectHandler);
+    this.chatClient.onMessage(
+      this.onMessageHandler(this.getResponse, this.chatClient, this.relations)
     );
 
-    this.client.on("whisper", (from, userstate, message, self) => {
-      const NLP_URL = process.env.NLP_URL;
-      let message_out = this.getResponse(NLP_URL, message, from);
-      message_out.then((response) => {
-        this.client
-          .whisper(from, response.data || "No entiendo que dices")
-          .catch((err) => {
-            console.error(err);
-          });
-      });
-    });
+    this.chatClient.onWhisper(this.onWhisperHandler);
 
-    this.client.connect();
+    this.chatClient.connect();
+  }
+
+  onConnectHandler() {
+    console.log("Connected to chat:");
   }
 
   initAdvices(fileName) {
@@ -51,7 +67,7 @@ class PGTwitchBot {
   startAdvises() {
     if (this.intervalAdvises._destroyed) {
       this.intervalAdvises = setInterval(() => {
-        this.sayAdvise(this.client, "#perju_gatar", this.advices);
+        this.sayAdvise(this.chatClient, "#perju_gatar", this.advices);
       }, 600000);
     }
   }
@@ -68,41 +84,44 @@ class PGTwitchBot {
     }, {});
   }
 
-  onConnectedHandler(addr, port) {
-    console.log(`* Connected to ${addr}:${port}`);
+  sayAdvise(chatClient, target, advices) {
+    chatClient.say(target, rndElem(advices)).catch((err) => console.log(err));
   }
 
-  sayAdvise(client, target, advices) {
-    client.say(target, rndElem(advices)).catch((err) => console.log(err));
+  onWhisperHandler(user, message, msg) {
+    const NLP_URL = process.env.NLP_URL;
+    let message_out = this.getResponse(NLP_URL, message, user);
+    message_out.then((response) => {
+      this.chatClient
+        .whisper(user, response.data || "No entiendo que dices")
+        .catch((err) => {
+          console.error(err);
+        });
+    });
   }
 
-  onMessageHandler(getResponse, client, relations) {
-    return (target, context, msg, self) => {
-      if (self) return;
+  onMessageHandler(getResponse, chatClient, relations) {
+    return (channel, user, message) => {
+      if (user === chatClient.currentNick) return;
 
-      const commandName = msg.trim();
+      const commandName = message.trim();
       if (commandName.startsWith("!dice")) {
         const sides = parseInt(commandName.split(" ")[1]);
         const num = rollDice(sides);
-        client.say(target, `${context.username} ha sacado un ${num}`);
+        chatClient.say(channel, `${user} ha sacado un ${num}`);
         console.log(`* Executed ${commandName} command`);
-      } else if (msg.toLowerCase().includes("@perjubot")) {
+      } else if (message.toLowerCase().includes("@perjubot")) {
         const NLP_URL = process.env.NLP_URL;
-        let message_out = getResponse(
-          NLP_URL,
-          msg,
-          context.username,
-          relations[context.username]
-        );
-        message_out.then((response) => {
-          let text = response.data || "No entiendo que dices";
-          client.emit("chat_res", {text: text});
-          client
-            .say(target, text)
-            .catch((err) => {
-              console.error(err);
-            });
-        });
+        let message_out = getResponse(NLP_URL, message, user, relations[user]);
+        message_out
+          .then((response) => {
+            let text = response.data || "No entiendo que dices";
+            chatClient.emit("chat_res", {channel: channel,text: text});
+            chatClient.say(channel, text);
+          })
+          .catch((err) => {
+            console.log(err);
+          });
       } else {
         console.log(`* Unknown command ${commandName}`);
       }
