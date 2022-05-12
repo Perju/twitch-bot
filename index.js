@@ -1,8 +1,7 @@
 import axios from "axios";
 import fs from "fs";
-import { RefreshableAuthProvider, StaticAuthProvider } from "twitch-auth";
-import { ChatClient } from "twitch-chat-client";
-
+import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
+import { ChatClient } from "@twurple/chat";
 
 class PGTwitchBot {
   constructor(config) {
@@ -14,30 +13,21 @@ class PGTwitchBot {
     this.clientSecret = process.env.TWITCH_BOT_SECRET;
 
     this.tokenData = JSON.parse(fs.readFileSync(this.config.tokens, "UTF-8"));
-    this.auth = new RefreshableAuthProvider(
-      new StaticAuthProvider(this.clientId, this.tokenData.accessToken),
+    this.auth = new RefreshingAuthProvider(
       {
+        clientId: this.clientId,
         clientSecret: this.clientSecret,
-        refreshToken: this.tokenData.refreshToken,
-        expiry:
-          this.tokenData.expiryTimestamp === null
-            ? null
-            : new Date(this.tokenData.expiryTimestamp),
-        onRefresh: ({ accessToken, refreshToken, expiryDate }) => {
-          const newTokenData = {
-            accessToken,
-            refreshToken,
-            expiryTimestamp: expiryDate === null ? null : expiryDate.getTime(),
-          };
+        onRefresh: (newTokenData) =>
           fs.writeFileSync(
             this.config.tokens,
             JSON.stringify(newTokenData, null, 4),
             "UTF-8"
-          );
-        },
-      }
+          ),
+      },
+      this.tokenData
     );
-    this.chatClient = new ChatClient(this.auth, {
+    this.chatClient = new ChatClient({
+      authProvider: this.auth,
       channels: [process.env.CHANNEL_ID],
     });
   }
@@ -116,7 +106,7 @@ class PGTwitchBot {
         message_out
           .then((response) => {
             let text = response.data || "No entiendo que dices";
-            chatClient.emit("chat_res", {channel: channel,text: text});
+            chatClient.emit("chat_res", { channel: channel, text: text });
             chatClient.say(channel, text);
           })
           .catch((err) => {
