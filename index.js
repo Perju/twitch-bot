@@ -2,6 +2,7 @@ import axios from "axios";
 import fs from "fs";
 import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
 import { ChatClient } from "@twurple/chat";
+import { PubSubClient } from "@twurple/pubsub";
 
 class PGTwitchBot {
   constructor(config) {
@@ -9,27 +10,29 @@ class PGTwitchBot {
     this.advices = [];
     this.relations = {};
     this.intervalAdvises = { _destroyed: true };
-    this.clientId = process.env.CLIENT_ID;
-    this.clientSecret = process.env.TWITCH_BOT_SECRET;
-
-    this.tokenData = JSON.parse(fs.readFileSync(this.config.tokens, "UTF-8"));
-    this.auth = new RefreshingAuthProvider(
-      {
-        clientId: this.clientId,
-        clientSecret: this.clientSecret,
-        onRefresh: (newTokenData) =>
-          fs.writeFileSync(
-            this.config.tokens,
-            JSON.stringify(newTokenData, null, 4),
-            "UTF-8"
-          ),
-      },
-      this.tokenData
+    this.botAuth = createRefreshingAuthProvider(
+      process.env.TWITCH_BOT_ID,
+      process.env.TWITCH_BOT_SECRET,
+      this.config.botTokens
     );
+
     this.chatClient = new ChatClient({
-      authProvider: this.auth,
+      authProvider: this.botAuth,
       channels: [process.env.CHANNEL_ID],
     });
+
+    this.streamerAuth = createRefreshingAuthProvider(
+      process.env.STREAMER_ID,
+      process.env.STREAMER_SECRET,
+      this.config.streamerTokens
+    );
+
+    this.pubSubClient = new PubSubClient();
+    this.listener = addRedemListener(
+      this.streamerAuth,
+      this.pubSubClient,
+      this.chatClient
+    );
   }
 
   initBot() {
@@ -92,7 +95,7 @@ class PGTwitchBot {
 
   onMessageHandler(getResponse, chatClient, relations) {
     return (channel, user, message) => {
-      if (user === chatClient.currentNick) return;
+      if (process.env.TWITCH_BOT_NAME === user) return;
 
       const commandName = message.trim();
       if (commandName.startsWith("!dice")) {
@@ -100,7 +103,7 @@ class PGTwitchBot {
         const num = rollDice(sides);
         chatClient.say(channel, `${user} ha sacado un ${num}`);
         console.log(`* Executed ${commandName} command`);
-      } else if (message.toLowerCase().includes("@perjubot")) {
+      } else if (message.toLowerCase().includes(process.env.TWITCH_BOT_NAME)) {
         const NLP_URL = process.env.NLP_URL;
         let message_out = getResponse(NLP_URL, message, user, relations[user]);
         message_out
@@ -131,6 +134,31 @@ class PGTwitchBot {
     };
     return axios(options);
   }
+}
+
+async function addRedemListener(auth, psClient, chatClient) {
+  let streamerId = await psClient.registerUserListener(auth);
+  return await psClient.onRedemption(streamerId, (message) => {
+    chatClient.emit("redem", { id: message.id });
+  });
+}
+
+function createRefreshingAuthProvider(clientId, clientSecret, tokenFile) {
+  let tokenData = JSON.parse(fs.readFileSync(tokenFile, "UTF-8"));
+  let auth = new RefreshingAuthProvider(
+    {
+      clientId,
+      clientSecret,
+      onRefresh: (newTokenData) =>
+        fs.writeFileSync(
+          tokenFile,
+          JSON.stringify(newTokenData, null, 4),
+          "UTF-8"
+        ),
+    },
+    tokenData
+  );
+  return auth;
 }
 
 function rollDice(nSides) {
