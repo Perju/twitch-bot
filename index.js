@@ -139,7 +139,7 @@ class PGTwitchBot {
 async function addRedemListener(auth, psClient, chatClient) {
   let streamerId = await psClient.registerUserListener(auth);
   return await psClient.onRedemption(streamerId, (message) => {
-    chatClient.emit("redem", { id: message.id });
+    chatClient.emit("redem", message);
   });
 }
 
